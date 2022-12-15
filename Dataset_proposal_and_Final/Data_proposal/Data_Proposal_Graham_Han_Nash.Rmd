@@ -1,0 +1,161 @@
+---
+title: "Data Proposal"
+author: "Andrew Graham, Ji Hoon Justin Han, Ethan Nash"
+date: '2022-12-13'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# R Packages 
+This list includes all of the packages we used for our analyses.
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(MASS)
+library(effects)
+library(hrbrthemes)
+library(ggpubr)
+library(lme4)
+library(car)
+library(broom)
+library(rstatix)
+library(ggfortify)
+library(MuMIn)
+```
+# Tidying and Cleaning Our Data
+1: Individual csv files separated by species were uploaded into R. Species files were named as the first two letters of Genus and Species (ex: ACBL = **Ac**anthurus **bl**ochii).
+```{r}
+ACBL <- read.csv("ACBL.csv")
+ACNF <- read.csv("ACNF.csv")
+ACTR <- read.csv("ACTR.csv")
+CAME <- read.csv("CAME.csv")
+NALI <- read.csv("NALI.csv")
+SCPS <- read.csv("SCPS.csv")
+SCRU <- read.csv("SCRU.csv")
+THDU <- read.csv("THDU.csv")
+```
+2. Raw files were combined into one dataset
+```{r}
+combined_raw <- bind_rows(ACBL,ACNF, ACTR, CAME, NALI, SCPS, SCRU, THDU)
+```
+3. combined raw files renamed
+```{r}
+fish_data <- combined_raw
+```
+4. Simplified and renamed column
+```{r}
+colnames (fish_data) [1] <- "Observer"
+colnames(fish_data) <- c("Observer","Code", "Family", "Genus & Species", "Trophic_level", "Fish_size", "School_size", "Start_distance", "FID", "Activity", "Response", "MAD", "Site", "Covid")
+```
+5. Unnecessary columns removed
+```{r}
+fish_data <- subset(fish_data, select=-c(Code, Observer))
+```
+6. Separated "Genus & Species" column into two separate columns
+```{r}
+fish_data <- fish_data %>% separate(`Genus & Species`, c('Genus', 'Species'))
+```
+7. Added column of log-transformed
+```{r}
+fish_data$logFID <- log(fish_data$FID)
+```
+8. Some character data replaced for clarification
+```{r}
+fish_data <- fish_data %>%
+  mutate(Covid = str_replace(Covid, "Pre", "Closed"))
+fish_data <- fish_data %>%
+  mutate(Covid = str_replace(Covid, "Post", "Open"))
+```
+9. Blanks in dataset were replaced with N/A
+```{r}
+fish_data  <- replace(fish_data , fish_data =='', NA)
+```
+10. Character columns changed to factors
+```{r}
+fish_data$Covid <- as.factor(fish_data$Covid)
+fish_data$Trophic_level <- as.factor(fish_data$Trophic_level)
+fish_data$Activity <- as.factor(fish_data$Activity)
+fish_data$Response <- as.factor(fish_data$Response)
+fish_data$Site <- as.factor(fish_data$Site)
+fish_data$Family <- as.factor(fish_data$Family)
+fish_data$Genus <- as.factor(fish_data$Genus)
+fish_data$Species <- as.factor(fish_data$Species)
+```
+10. Final Checks
+```{r}
+glimpse(fish_data)
+```
+# Data Visualization
+Colorblind Palette colors added in
+```{r}
+cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+```
+Box plot of Flight Initiation Distance by bay access to Hanauma Bay and by species
+```{r}
+ggplot(fish_data, aes(x = log(FID), Covid)) +
+  geom_boxplot(na.rm = TRUE) +
+  scale_fill_manual(values=cbPalette) +
+  ggtitle("Flight Initiation Distance by Access") +
+  xlab("FID (mm)") +
+  ylab("Bay Status")
+ggplot(fish_data, aes(x = FID, Species, fill = Covid)) + 
+  geom_boxplot() +
+  scale_fill_manual(values=cbPalette) +
+  ggtitle("Flight Initiation Distance x spp. by Bay Access") +
+  xlab("FID (mm)")
+```
+Box plot of Minimum Approach Distance by bay access to Hanauma Bay by species
+```{r}
+ggplot(fish_data, aes(x = log(MAD), Covid)) +
+  geom_boxplot(na.rm = TRUE) +
+  scale_fill_manual(values=cbPalette) +
+  ggtitle("Minimal Approach Distance by Access") +
+  xlab("MAD (mm)") +
+  ylab("Bay Status")
+ggplot(fish_data, aes(x = MAD, y = Species, fill = Covid)) + 
+  geom_boxplot(na.rm = TRUE) +
+  scale_fill_manual(values=cbPalette) +
+  ggtitle("Minimal Approach Distance x spp. by Bay Access") +
+  xlab("MAD (mm)")
+```
+Box plot of Flight Initiation Distance & Minimal Approach Distance by Trophic level
+```{r}
+ggplot(fish_data, aes(x = FID, Y=Trophic_level)) + 
+  geom_boxplot() +
+  ggtitle("Flight Initiation Distance x Trophic level") +
+  xlab("FID (mm)")
+ggplot(fish_data, aes(x = MAD, Y=Trophic_level)) + 
+  geom_boxplot(na.rm = TRUE) +
+  ggtitle("Minimal Approach Distance x Trophic level") +
+  xlab("MAD (mm)")
+```
+Scatterplot showing Fish Size and FID
+```{r}
+ggplot(data = fish_data, mapping = aes(x=FID, y= Fish_size)) +
+  geom_point(size = 1, na.rm = TRUE) +
+  geom_smooth(formula = y ~ x, method ="lm", color = "red", se=FALSE, na.rm = TRUE) +
+  stat_regline_equation(label.y = 1000, aes(label = ..rr.label..)) +
+  facet_wrap( ~ Species, ncol=2) +
+  ggtitle("Fish size vs. FID") +
+  xlab("Fish length (mm)") +
+  ylab("FID (mm)")
+```
+Scatterplot showing MAD by Fish Size
+```{r}
+ggplot(data = fish_data, mapping = aes(x=MAD, y= Fish_size)) +
+  geom_point(size = 1, na.rm = TRUE) +
+  geom_smooth(formula = y ~ x, method ="lm", color = "blue", se=FALSE, na.rm = TRUE) +
+  stat_regline_equation(label.y = 1500, aes(label = ..rr.label..)) +
+  facet_wrap( ~ Species, ncol=2) +
+  ggtitle("Minimal Approach Distance by Fish size") +
+  xlab("Fish length (mm)") +
+  ylab("MAD (mm)")
+```
+
+
